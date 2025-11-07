@@ -39,15 +39,26 @@ var eslint_linting_code = (line) => {
     return false;
   return split2;
 };
+function waitForAbort(controller) {
+  const { signal } = controller;
+  controller.abort();
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    signal.addEventListener("abort", () => resolve(), { once: true });
+  });
+}
 var WorkerListenr = class {
-  constructor(filter, effective_title) {
+  constructor(filter, start_message) {
     __publicField(this, "start_time", 0);
     __publicField(this, "last_line", "");
     __publicField(this, "count", 0);
     __publicField(this, "filter");
-    __publicField(this, "effective_title");
+    __publicField(this, "start_message");
     this.filter = filter;
-    this.effective_title = effective_title;
+    this.start_message = start_message;
   }
   print_filtered(line) {
     const filtered = this.filter(line);
@@ -60,8 +71,8 @@ var WorkerListenr = class {
     console.log(this.count++, filtered);
   }
   start() {
-    console.clear();
-    console.log("=================================================================");
+    process.stdout.write("\x1Bc");
+    console.log(this.start_message, "=================================================================");
     this.start_time = Date.now();
   }
   elapsed() {
@@ -95,7 +106,7 @@ function run_cmd({
 }) {
   const ans = new AbortController();
   const { signal } = ans;
-  void new Promise((resolve, reject) => {
+  void new Promise((resolve, _reject) => {
     const child = (0, import_node_child_process.spawn)(cmd, {
       signal,
       shell: true,
@@ -119,7 +130,7 @@ function run_cmd({
   });
   return ans;
 }
-function run({ cmd, title, watchfiles = [], filter = allways_true }) {
+async function run({ cmd, title, watchfiles = [], filter = allways_true }) {
   const effective_title = (function() {
     if (title != null)
       return title;
@@ -132,10 +143,8 @@ function run({ cmd, title, watchfiles = [], filter = allways_true }) {
   let filename_changed = "";
   function runit(reason) {
     last_run = Date.now();
-    console.clear();
-    console.log(`starting ${effective_title || ""} ${reason}`);
     let controller2 = new AbortController();
-    const worker_listener = new WorkerListenr(filter, effective_title);
+    const worker_listener = new WorkerListenr(filter, `starting ${effective_title || ""}: ${reason}`);
     try {
       if (typeof cmd === "string")
         controller2 = run_cmd({ cmd, worker_listener });
@@ -148,18 +157,20 @@ function run({ cmd, title, watchfiles = [], filter = allways_true }) {
   }
   let controller = runit("initial");
   for (const filename of watchfiles) {
-    (0, import_node_fs.watch)(filename, {}, (eventType, filename2) => {
+    (0, import_node_fs.watch)(filename, {}, (eventType, changed_file) => {
+      const changed = `changed: ${filename}/${changed_file} `;
+      console.log(changed);
       last_changed = Date.now();
-      if (filename2 != null)
-        filename_changed = filename2;
+      filename_changed = changed;
     });
   }
-  setInterval(() => {
+  while (true) {
     if (last_changed > last_run) {
-      controller.abort();
-      controller = runit(`file changed ${filename_changed}`);
+      await waitForAbort(controller);
+      controller = runit(filename_changed);
     }
-  }, 1e3);
+    await new Promise((r) => setTimeout(r, 1e3));
+  }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

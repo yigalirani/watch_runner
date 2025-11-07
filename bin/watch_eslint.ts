@@ -1,5 +1,5 @@
 import {run,eslint_linting_code} from '../src/index.ts'
-run({
+void run({
   cmd:'set timing=1&npx eslint . --debug --color ',
   watchfiles:[
     'src',

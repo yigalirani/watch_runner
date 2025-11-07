@@ -14,15 +14,26 @@ export const eslint_linting_code:FilterFunc=(line:string)=>{
     return false
   return split2
 }
+function waitForAbort(controller: AbortController): Promise<void> {
+  const { signal } = controller;
+  controller.abort()
+  return new Promise<void>((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    signal.addEventListener('abort', () => resolve(), { once: true });
+  });
+}
 class WorkerListenr{
   start_time:number=0
   last_line=''
   count=0
   filter:FilterFunc
-  effective_title:string
-  constructor(filter:FilterFunc,effective_title:string){
+  start_message:string
+  constructor(filter:FilterFunc,start_message:string){
     this.filter=filter
-    this.effective_title=effective_title
+    this.start_message=start_message
   }
   print_filtered(line:string){
     const filtered=this.filter(line)
@@ -35,8 +46,8 @@ class WorkerListenr{
     console.log(this.count++,filtered)
   }  
   start(){
-    console.clear()
-    console.log('=================================================================')
+    process.stdout.write('\x1Bc'); //clear screen
+    console.log(this.start_message,'=================================================================')
     this.start_time=Date.now()
   }
   elapsed(){
@@ -76,7 +87,7 @@ function run_cmd({
 }):AbortController {
   const ans=new AbortController()
   const {signal}=ans
-  void new Promise((resolve, reject) => { 
+  void new Promise((resolve, _reject) => { 
   
     const child = spawn(cmd, {
       signal,
@@ -103,7 +114,7 @@ function run_cmd({
   return ans
 }
 
-export  function run({cmd,title,watchfiles=[],filter=allways_true}:{
+export  async function run({cmd,title,watchfiles=[],filter=allways_true}:{
   cmd:string|(()=>Promise<void>)
   title?:string
   watchfiles?:string[]
@@ -121,11 +132,8 @@ export  function run({cmd,title,watchfiles=[],filter=allways_true}:{
   let filename_changed=''
   function runit(reason:string){
     last_run=Date.now()
-    console.clear()
-    console.log(`starting ${effective_title||''} ${reason}`)
-
     let controller=new AbortController()
-    const worker_listener=new WorkerListenr(filter,effective_title)
+    const worker_listener=new WorkerListenr(filter,`starting ${effective_title||''}: ${reason}`)
     try{
       if (typeof cmd==='string')
         controller=run_cmd({cmd:cmd,worker_listener})
@@ -133,24 +141,26 @@ export  function run({cmd,title,watchfiles=[],filter=allways_true}:{
         console.log('todo: run function')
         //await cmd()
     }catch(ex){
-      worker_listener.error(ex)
+      worker_listener.error(ex)  
       //console.log(`failed ${effective_title||''} ${duration} ms: ${String(ex)}`)      
     }
     return controller
   }
   let controller=runit('initial')
   for (const filename of watchfiles){
-    watch(filename,{},(eventType, filename) => {
-      //console.log(`changed: ${filename} ,${eventType}`);
+    watch(filename,{},(eventType, changed_file) => {
+      const changed=`changed: ${filename}/${changed_file} `
+      console.log(changed);
       last_changed=Date.now()
-      if (filename!=null)
-        filename_changed=filename
-    })
+      filename_changed=changed
+    }) 
   }
-  setInterval(()=>{
-    if (last_changed > last_run) {
-      controller.abort()
-      controller= runit(`file changed ${filename_changed}`)
+  while (true) { 
+    //console.log('loop',last_changed , last_run,last_changed > last_run)
+    if (last_changed > last_run) {  
+      await waitForAbort(controller)
+      controller= runit(filename_changed)
     }
-  }, 1000);
+    await new Promise(r => setTimeout(r, 1000)); // wait 1s before next iteration
+  }  
 }

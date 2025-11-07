@@ -12,7 +12,7 @@ async function cmd(){
   })
 } 
  
-run({
+void run({
   cmd,
   title:'build',
   watchfiles:[
