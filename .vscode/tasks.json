@@ -12,12 +12,8 @@
       "label": "watch_build",
       "type": "shell",
       "command": "npm run watch_build",
-    }, 
-        {
-      "label": "run_build",
-      "type": "shell",
-      "command": "npm run run_build",
-    },         {
+    },     
+    {
       "label": "watch_eslint",
       "type": "shell",
       "command": "npm run watch_eslint",
@@ -27,7 +23,7 @@
       "dependsOn": [
         "watch_tsc",
         "watch_build",
-        "run_build",
+        "watch_build",
         "watch_eslint"
       ]
     }     
