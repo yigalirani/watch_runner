@@ -28,14 +28,16 @@ function waitForAbort(controller) {
   });
 }
 var WorkerListenr = class {
-  constructor(filter, start_message) {
+  constructor(filter, effective_title, reason) {
     __publicField(this, "start_time", 0);
     __publicField(this, "last_line", "");
     __publicField(this, "count", 0);
     __publicField(this, "filter");
-    __publicField(this, "start_message");
+    __publicField(this, "effective_title");
+    __publicField(this, "reason");
+    this.reason = reason;
     this.filter = filter;
-    this.start_message = start_message;
+    this.effective_title = effective_title;
   }
   print_filtered(line) {
     const filtered = this.filter(line);
@@ -49,7 +51,10 @@ var WorkerListenr = class {
   }
   start() {
     process.stdout.write("\x1Bc");
-    console.log(this.start_message, "=================================================================");
+    console.log("running:", "\x1B[30m\x1B[32m", this.effective_title, "\x1B[0m");
+    console.log("reason :", "\x1B[30m\x1B[32m", this.reason, "\x1B[0m");
+    console.log("cli    :", "\x1B[30m\x1B[32m", process.argv.slice(1).join(" "), "\x1B[0m");
+    console.log("time   :", "\x1B[30m\x1B[32m", (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: true }), "\x1B[0m");
     this.start_time = Date.now();
   }
   elapsed() {
@@ -121,7 +126,7 @@ async function run({ cmd, title, watchfiles = [], filter = allways_true }) {
   function runit(reason) {
     last_run = Date.now();
     let controller2 = new AbortController();
-    const worker_listener = new WorkerListenr(filter, `starting ${effective_title || ""}: ${reason}`);
+    const worker_listener = new WorkerListenr(filter, effective_title || "", reason);
     try {
       if (typeof cmd === "string")
         controller2 = run_cmd({ cmd, worker_listener });
@@ -135,7 +140,7 @@ async function run({ cmd, title, watchfiles = [], filter = allways_true }) {
   let controller = runit("initial");
   for (const filename of watchfiles) {
     watch(filename, {}, (eventType, changed_file) => {
-      const changed = `changed: ${filename}/${changed_file} `;
+      const changed = `*${filename}/${changed_file} `;
       console.log(changed);
       last_changed = Date.now();
       filename_changed = changed;
