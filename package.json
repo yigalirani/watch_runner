@@ -1,6 +1,6 @@
 {
   "name"                     : "@yigal/watch_runner",
-  "version"                  : "1.0.1",
+  "version"                  : "1.0.2",
   "repository": {
     "type"                   : "git",
     "url"                    : "git+https://github.com/yigalirani/watch_runner.git"
@@ -10,7 +10,7 @@
   "author"                   : "Yigal Irani",
   "type"                     : "module",
   "main"                     : "dist/index.js",
-  "types"                    : "dist/index.d.ts",
+  "types"                    : "types/src/index.d.ts",
   "scripts": {
     "watch_tsc"              : "tsc --watch",
     "watch_build"            : "node ./bin/watch_build.ts",
