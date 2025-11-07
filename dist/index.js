@@ -5,6 +5,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
 // src/index.ts
 import { spawn } from "child_process";
 import { watch } from "fs";
+var green = "\x1B[40m\x1B[32m";
+var red = "\x1B[40m\x1B[31m";
+var reset = "\x1B[0m";
 var eslint_linting_code = (line) => {
   if (line.split(" eslintrc:").length > 1)
     return false;
@@ -51,21 +54,24 @@ var WorkerListenr = class {
   }
   start() {
     process.stdout.write("\x1Bc");
-    console.log("running:", "\x1B[30m\x1B[32m", this.effective_title, "\x1B[0m");
-    console.log("reason :", "\x1B[30m\x1B[32m", this.reason, "\x1B[0m");
-    console.log("cli    :", "\x1B[30m\x1B[32m", process.argv.slice(1).join(" "), "\x1B[0m");
-    console.log("time   :", "\x1B[30m\x1B[32m", (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: true }), "\x1B[0m");
+    console.log("running:", green, this.effective_title, reset);
+    console.log("reason :", green, this.reason, reset);
+    console.log("cli    :", green, process.argv.slice(1).join(" "), reset);
+    console.log("time   :", green, (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour12: true }), reset);
     this.start_time = Date.now();
   }
   elapsed() {
-    return `elapsed=${Date.now() - this.start_time}ms`;
+    return `elapsed: ${Date.now() - this.start_time} ms`;
   }
   flush() {
     this.print_filtered(this.last_line);
   }
-  close(code) {
+  exit(code) {
     this.flush();
-    console.warn(`exited,code=${code},${this.elapsed()}`);
+    if (code === 0)
+      console.log(green, "done ok ", reset, this.elapsed());
+    else
+      console.log(red, "done with fail code", code, reset, this.elapsed());
   }
   error(err) {
     this.flush();
@@ -97,16 +103,8 @@ function run_cmd({
     child.on("spawn", () => worker_listener.start());
     child.stdout.on("data", (data) => worker_listener.data(String(data)));
     child.stderr.on("data", (data) => worker_listener.data(String(data)));
-    child.on("close", (code) => {
-      worker_listener.close(code);
-      resolve(null);
-    });
-    child.on("exit", (err) => {
-      worker_listener.error(err);
-      resolve(null);
-    });
-    child.on("error", (err) => {
-      worker_listener.error(err);
+    child.on("exit", (code) => {
+      worker_listener.exit(code);
       resolve(null);
     });
   });

@@ -2,7 +2,9 @@
 import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
 type FilterFunc=(line:string)=>string|true|false //string-show just the string  +line number, true show as is, false dont show
-
+const green='\x1b[40m\x1b[32m'
+const red='\x1b[40m\x1b[31m'
+const reset='\x1b[0m'
 export const eslint_linting_code:FilterFunc=(line:string)=>{
   if (line.split(' eslintrc:').length>1)
     return false
@@ -49,21 +51,24 @@ class WorkerListenr{
   }  
   start(){
     process.stdout.write('\x1Bc'); //clear screen
-    console.log('running:','\x1b[30m\x1b[32m',this.effective_title,'\x1b[0m') 
-    console.log('reason :','\x1b[30m\x1b[32m',this.reason,'\x1b[0m')
-    console.log('cli    :','\x1b[30m\x1b[32m',process.argv.slice(1).join(' '),'\x1b[0m')
-    console.log('time   :','\x1b[30m\x1b[32m',new Date().toLocaleTimeString('en-US', { hour12: true }),'\x1b[0m')
+    console.log('running:',green,this.effective_title,reset) 
+    console.log('reason :',green,this.reason,reset)
+    console.log('cli    :',green,process.argv.slice(1).join(' '),reset)
+    console.log('time   :',green,new Date().toLocaleTimeString('en-US', { hour12: true }),reset)
     this.start_time=Date.now()
   }
   elapsed(){
-    return `elapsed=${Date.now()-this.start_time}ms`
+    return `elapsed: ${Date.now()-this.start_time} ms`
   }
   flush(){
     this.print_filtered(this.last_line)
   }
-  close(code:number|null){
+  exit(code:number|null){
     this.flush()
-    console.warn(`exited,code=${code},${this.elapsed()}`);
+    if (code===0)
+      console.log(green,'done ok ',reset,this.elapsed())
+    else
+      console.log(red,'done with fail code',code,reset,this.elapsed())
   }
   error(err:unknown){
     this.flush()
@@ -102,19 +107,15 @@ function run_cmd({
     child.on('spawn',()=>worker_listener.start())
     child.stdout.on("data", (data:unknown) => worker_listener.data(String(data)))
     child.stderr.on("data", (data:unknown) => worker_listener.data(String(data)))
-    child.on("close", (code) => {
-      worker_listener.close(code)
+    child.on("exit", (code) => {
+      worker_listener.exit(code)
       resolve(null);
     });
 
-    child.on("exit", (err) => {
+    /*child.on("error", (err) => {
       worker_listener.error(err)
       resolve(null);
-    });
-    child.on("error", (err) => {
-      worker_listener.error(err)
-      resolve(null);
-    });
+    });*/
   });
   return ans
 }
