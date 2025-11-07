@@ -7,6 +7,7 @@ await esbuild.build({
   sourcemap: true,
   target: 'node10',
   minifySyntax:false,
+  format: 'esm'
 })
  
 
