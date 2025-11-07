@@ -75,7 +75,8 @@ var WorkerListenr = class {
   }
   error(err) {
     this.flush();
-    console.warn(`failed,err=${err},${this.elapsed()}`);
+    const message = err instanceof Error ? err.message : String(err);
+    console.log(red, "failed", message, reset, this.elapsed());
   }
   data(a) {
     const total_text = this.last_line + a;
@@ -104,7 +105,12 @@ function run_cmd({
     child.stdout.on("data", (data) => worker_listener.data(String(data)));
     child.stderr.on("data", (data) => worker_listener.data(String(data)));
     child.on("exit", (code) => {
-      worker_listener.exit(code);
+      if (code != null)
+        worker_listener.exit(code);
+      resolve(null);
+    });
+    child.on("error", (err) => {
+      worker_listener.error(err);
       resolve(null);
     });
   });
@@ -126,10 +132,7 @@ async function run({ cmd, title, watchfiles = [], filter = allways_true }) {
     let controller2 = new AbortController();
     const worker_listener = new WorkerListenr(filter, effective_title || "", reason);
     try {
-      if (typeof cmd === "string")
-        controller2 = run_cmd({ cmd, worker_listener });
-      else
-        console.log("todo: run function");
+      controller2 = run_cmd({ cmd, worker_listener });
     } catch (ex) {
       worker_listener.error(ex);
     }
@@ -139,7 +142,6 @@ async function run({ cmd, title, watchfiles = [], filter = allways_true }) {
   for (const filename of watchfiles) {
     watch(filename, {}, (eventType, changed_file) => {
       const changed = `*${filename}/${changed_file} `;
-      console.log(changed);
       last_changed = Date.now();
       filename_changed = changed;
     });

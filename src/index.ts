@@ -63,16 +63,18 @@ class WorkerListenr{
   flush(){
     this.print_filtered(this.last_line)
   }
-  exit(code:number|null){
+  exit(code:number){
     this.flush()
     if (code===0)
       console.log(green,'done ok ',reset,this.elapsed())
     else
       console.log(red,'done with fail code',code,reset,this.elapsed())
   }
+
   error(err:unknown){
     this.flush()
-    console.warn(`failed,err=${err},${this.elapsed()}`);
+    const message=err instanceof Error?err.message:String(err)
+    console.log(red,'failed',message,reset,this.elapsed())
   }
   data(a:string){
     const total_text=this.last_line+a
@@ -108,20 +110,21 @@ function run_cmd({
     child.stdout.on("data", (data:unknown) => worker_listener.data(String(data)))
     child.stderr.on("data", (data:unknown) => worker_listener.data(String(data)))
     child.on("exit", (code) => {
-      worker_listener.exit(code)
+      if (code!=null)
+        worker_listener.exit(code)
       resolve(null);
     });
 
-    /*child.on("error", (err) => {
+    child.on("error", (err) => {
       worker_listener.error(err)
       resolve(null);
-    });*/
+    });
   });
   return ans
 }
 
 export  async function run({cmd,title,watchfiles=[],filter=allways_true}:{
-  cmd:string|(()=>Promise<void>)
+  cmd:string
   title?:string
   watchfiles?:string[]
   filter?:FilterFunc
@@ -141,11 +144,7 @@ export  async function run({cmd,title,watchfiles=[],filter=allways_true}:{
     let controller=new AbortController()
     const worker_listener=new WorkerListenr(filter,effective_title||'',reason)
     try{
-      if (typeof cmd==='string')
-        controller=run_cmd({cmd:cmd,worker_listener})
-      else
-        console.log('todo: run function')
-        //await cmd()
+      controller=run_cmd({cmd:cmd,worker_listener})
     }catch(ex){
       worker_listener.error(ex)  
       //console.log(`failed ${effective_title||''} ${duration} ms: ${String(ex)}`)      
@@ -156,7 +155,7 @@ export  async function run({cmd,title,watchfiles=[],filter=allways_true}:{
   for (const filename of watchfiles){
     watch(filename,{},(eventType, changed_file) => {
       const changed=`*${filename}/${changed_file} `  
-      console.log(changed);
+      //console.log(changed);
       last_changed=Date.now()
       filename_changed=changed
     }) 
