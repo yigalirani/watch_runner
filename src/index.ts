@@ -14,71 +14,96 @@ export const eslint_linting_code:FilterFunc=(line:string)=>{
     return false
   return split2
 }
-function make_filter_stream(filter:FilterFunc){
-  let last_line=''
-  let count=0
-  function print_filtered(line:string){
-    const filtered=filter(line)
+class WorkerListenr{
+  start_time:number=0
+  last_line=''
+  count=0
+  filter:FilterFunc
+  effective_title:string
+  constructor(filter:FilterFunc,effective_title:string){
+    this.filter=filter
+    this.effective_title=effective_title
+  }
+  print_filtered(line:string){
+    const filtered=this.filter(line)
     if (filtered===false)
       return 
     if (filtered===true){
       console.log(line)
       return 
     }
-    console.log(count++,filtered)
+    console.log(this.count++,filtered)
+  }  
+  start(){
+    console.clear()
+    console.log('=================================================================')
+    this.start_time=Date.now()
   }
-  return {
-    write(a:string){
-      const total_text=last_line+a
-      const lines=total_text.split('\n')
-      for (const  line of lines.slice(0,-1))
-        print_filtered(line)
-    
-      last_line=lines.at(-1)||''
-    },
-    flush(){
-        print_filtered(last_line)
-    }
+  elapsed(){
+    return `elapsed=${Date.now()-this.start_time}ms`
+  }
+  flush(){
+    this.print_filtered(this.last_line)
+  }
+  close(code:number|null){
+    this.flush()
+    console.warn(`exited,code=${code},${this.elapsed()}`);
+  }
+  error(err:unknown){
+    this.flush()
+    console.warn(`failed,err=${err},${this.elapsed()}`);
+  }
+  data(a:string){
+    const total_text=this.last_line+a
+    const lines=total_text.split('\n')
+    for (const  line of lines.slice(0,-1))
+      this.print_filtered(line)
+  
+    this.last_line=lines.at(-1)||''
   }
 }
+
 function allways_true(_a:string){
   return true
 }
-async function run_cmd({
+
+function run_cmd({
   cmd,
-  filter=allways_true,
+  worker_listener
 }: {
   cmd: string;
-  filter?: FilterFunc;
-}) {
-  const filter_stream=make_filter_stream(filter)
-  return await new Promise((resolve, reject) => {
+  worker_listener:WorkerListenr
+}):AbortController {
+  const ans=new AbortController()
+  const {signal}=ans
+  void new Promise((resolve, reject) => { 
+  
     const child = spawn(cmd, {
+      signal,
       shell: true,
-      env: { ...process.env, FORCE_COLOR: "1" },
+      env: { ...process.env, FORCE_COLOR: "1" },  
     });
-
-    child.stdout.on("data", (data) => {
-      filter_stream.write(String(data))
-    });
-
-    child.stderr.on("data", (data) => {
-      filter_stream.write(String(data))
-    });
-
+    child.on('spawn',()=>worker_listener.start())
+    child.stdout.on("data", (data:unknown) => worker_listener.data(String(data)))
+    child.stderr.on("data", (data:unknown) => worker_listener.data(String(data)))
     child.on("close", (code) => {
-      filter_stream.flush()
-      console.warn(`process exited with code ${code}`);
+      worker_listener.close(code)
       resolve(null);
     });
 
+    child.on("exit", (err) => {
+      worker_listener.error(err)
+      resolve(null);
+    });
     child.on("error", (err) => {
-      reject(err);
+      worker_listener.error(err)
+      resolve(null);
     });
   });
+  return ans
 }
 
-export async function run({cmd,title,watchfiles=[],filter}:{
+export  function run({cmd,title,watchfiles=[],filter=allways_true}:{
   cmd:string|(()=>Promise<void>)
   title?:string
   watchfiles?:string[]
@@ -94,26 +119,26 @@ export async function run({cmd,title,watchfiles=[],filter}:{
   let last_run=0
   let last_changed=0
   let filename_changed=''
-  async function runit(reason:string){
+  function runit(reason:string){
     last_run=Date.now()
     console.clear()
     console.log(`starting ${effective_title||''} ${reason}`)
-    const start=Date.now()
+
+    let controller=new AbortController()
+    const worker_listener=new WorkerListenr(filter,effective_title)
     try{
       if (typeof cmd==='string')
-        await run_cmd({cmd:cmd,filter})
+        controller=run_cmd({cmd:cmd,worker_listener})
       else
-        await cmd()
-      const end=Date.now()  
-      const duration=(end-start)
-      console.log(`done ${effective_title||''} ${duration} ms`)
+        console.log('todo: run function')
+        //await cmd()
     }catch(ex){
-     const end=Date.now()  
-      const duration=(end-start)
-      console.log(`failed ${effective_title||''} ${duration} ms: ${String(ex)}`)      
+      worker_listener.error(ex)
+      //console.log(`failed ${effective_title||''} ${duration} ms: ${String(ex)}`)      
     }
+    return controller
   }
-  await runit('initial')
+  let controller=runit('initial')
   for (const filename of watchfiles){
     watch(filename,{},(eventType, filename) => {
       //console.log(`changed: ${filename} ,${eventType}`);
@@ -124,7 +149,8 @@ export async function run({cmd,title,watchfiles=[],filter}:{
   }
   setInterval(()=>{
     if (last_changed > last_run) {
-       void runit(`file changed ${filename_changed}`)
+      controller.abort()
+      controller= runit(`file changed ${filename_changed}`)
     }
   }, 1000);
 }

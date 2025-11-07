@@ -5,5 +5,5 @@ export declare function run({ cmd, title, watchfiles, filter }: {
     title?: string;
     watchfiles?: string[];
     filter?: FilterFunc;
-}): Promise<void>;
+}): void;
 export {};
