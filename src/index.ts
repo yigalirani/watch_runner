@@ -153,12 +153,17 @@ export  async function run({cmd,title,watchfiles=[],filter=allways_true}:{
   }
   let controller=runit('initial')
   for (const filename of watchfiles){
-    watch(filename,{},(eventType, changed_file) => {
-      const changed=`*${filename}/${changed_file} `  
-      //console.log(changed);
-      last_changed=Date.now()
-      filename_changed=changed
-    }) 
+    try{
+      console.log(`watching ${filename}`)
+      watch(filename,{},(eventType, changed_file) => {
+        const changed=`*${filename}/${changed_file} `  
+        //console.log(changed);
+        last_changed=Date.now()
+        filename_changed=changed
+      }) 
+    }catch(ex){
+      console.warn(`file not found, ignoring ${filename}: ${String(ex)}`)  
+    }
   }
   while (true) { 
     //console.log('loop',last_changed , last_run,last_changed > last_run)

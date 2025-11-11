@@ -1,12 +1,13 @@
 import {run} from '../src/index.ts'
 
- 
-void run({
+ void run({
   cmd:'node bin/run_build.ts',
   title:'build',
   watchfiles:[
     'src',
     'package.json',
-    'tsconfig.json'
+    'tsconfig.json',
+    'generated'
   ]
 })
+console.log('starting build watcher')
